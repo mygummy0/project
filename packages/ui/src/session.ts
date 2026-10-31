@@ -74,6 +74,7 @@ export class IdeSession {
   private saving = 0;
   private noticeId = 0;
   private revealId = 0;
+  private problemsSignature = "";
   private outputBuffer: OutputEntry[] = [];
   private outputTimer: ReturnType<typeof setTimeout> | null = null;
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
@@ -306,6 +307,10 @@ export class IdeSession {
   }
   setMobileView(mobileView: IdeState["mobileView"]) {
     this.set({ mobileView });
+    if (mobileView === "preview") {
+      // The pane becomes visible on the next frame; then catch up on edits made while it was hidden.
+      requestAnimationFrame(() => this.preview.refreshIfStale());
+    }
   }
   setCursor(cursor: IdeState["cursor"]) {
     this.set({ cursor });
@@ -681,6 +686,10 @@ export class IdeSession {
       });
     }
     problems.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
+    // Markers are re-published after every edit; only touch the store when something changed.
+    const signature = JSON.stringify(problems);
+    if (signature === this.problemsSignature) return;
+    this.problemsSignature = signature;
     this.set({ problems });
   }
 

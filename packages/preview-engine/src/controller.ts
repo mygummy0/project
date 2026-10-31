@@ -44,6 +44,8 @@ export class PreviewController {
   entry: string | undefined;
   private sandboxUrl: string | undefined;
   private pendingHtml: string | null = null;
+  /** True when a live update was skipped because the preview was not visible. */
+  private stale = false;
 
   constructor(opts: PreviewControllerOptions = {}) {
     this.sandboxUrl = opts.sandboxUrl;
@@ -77,7 +79,17 @@ export class PreviewController {
   update(): void {
     if (!this.running) return;
     if (this.debounce) clearTimeout(this.debounce);
-    this.debounce = setTimeout(() => this.render(), this.debounceMs);
+    this.debounce = setTimeout(() => this.render(false), this.debounceMs);
+  }
+
+  /** Call when the preview becomes visible (e.g. the mobile "Preview" tab opens). */
+  refreshIfStale(): void {
+    if (this.running && this.stale) this.render(true);
+  }
+
+  private isHidden(): boolean {
+    // display:none (or detached) elements have no offsetParent.
+    return !this.iframe || this.iframe.offsetParent === null;
   }
 
   reload(): void {
@@ -104,8 +116,14 @@ export class PreviewController {
     this.events.clear();
   }
 
-  private render(): void {
+  /** `force` is used for explicit Run/Reload; live edits are skipped while the preview is hidden. */
+  private render(force = true): void {
     if (!this.getFiles) return;
+    if (!force && this.isHidden()) {
+      this.stale = true;
+      return;
+    }
+    this.stale = false;
     if (this.loadTimer) clearTimeout(this.loadTimer);
     this.token = Math.random().toString(36).slice(2) + Date.now().toString(36);
     const build = buildPreviewDocument(this.getFiles(), { token: this.token, entry: this.entry });

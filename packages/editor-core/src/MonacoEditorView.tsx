@@ -38,11 +38,30 @@ export function MonacoEditorView(props: EditorViewProps) {
       scrollBeyondLastLine: false,
       smoothScrolling: true,
       renderWhitespace: "selection",
+      fontLigatures: false,
       bracketPairColorization: { enabled: true },
       fixedOverflowWidgets: true,
       readOnly: cb.current.readOnly,
     });
     editorRef.current = editor;
+
+    // Narrow editors (phones, split view) skip the costly extras: minimap, sticky scroll, smooth
+    // scrolling and whitespace rendering, and wrap long lines instead of scrolling horizontally.
+    let compact: boolean | null = null;
+    const applyDensity = () => {
+      const isCompact = editor.getLayoutInfo().width < 640;
+      if (isCompact === compact) return;
+      compact = isCompact;
+      editor.updateOptions({
+        minimap: { enabled: !isCompact },
+        stickyScroll: { enabled: !isCompact },
+        smoothScrolling: !isCompact,
+        renderWhitespace: isCompact ? "none" : "selection",
+        wordWrap: isCompact ? "on" : "off",
+        occurrencesHighlight: isCompact ? "off" : "singleFile",
+      });
+    };
+    applyDensity();
 
     const subs: Monaco.IDisposable[] = [
       editor.onDidChangeCursorPosition((e) => {
@@ -52,6 +71,7 @@ export function MonacoEditorView(props: EditorViewProps) {
         cb.current.onCursorChange({ line: e.position.lineNumber, column: e.position.column, selectedChars });
       }),
       editor.onDidFocusEditorText(() => cb.current.onFocus?.()),
+      editor.onDidLayoutChange(applyDensity),
       editor.addAction({
         id: "webide.save",
         label: "Save File",
