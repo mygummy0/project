@@ -139,6 +139,12 @@ curl -fsSI "http://127.0.0.1:$PORT/sandbox" | grep -qi '^content-security-policy
 log "Done"
 echo "Open:      $URL/editor/demo-project"
 echo "Logs:      journalctl -u webide -f"
-echo "Update:    sudo bash $APP_DIR/deploy.sh"
+if [ "$LOCAL_ONLY" = 1 ]; then
+  echo "Update:    sudo LOCAL_ONLY=1 PORT=$PORT bash $APP_DIR/deploy.sh"
+elif [ -n "$DOMAIN" ]; then
+  echo "Update:    sudo DOMAIN=$DOMAIN EMAIL=$EMAIL bash $APP_DIR/deploy.sh"
+else
+  echo "Update:    sudo PORT=$PORT bash $APP_DIR/deploy.sh"
+fi
 [ -z "$DOMAIN" ] && [ "$LOCAL_ONLY" != 1 ] && echo "Note: without a domain the site is plain HTTP; some browser features work best over HTTPS."
 exit 0
