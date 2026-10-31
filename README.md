@@ -39,7 +39,9 @@ so any Next.js host works. With Vercel:
 2. Set **Root Directory** to `apps/web` (framework: Next.js; install/build commands: defaults).
 3. Deploy → the site is available at `https://<project>.vercel.app` (`/editor/demo-project` opens the IDE).
 
-Self-hosting: `npm install && npm run build && npm start` (port 3000) behind any reverse proxy.
+Self-hosting on Ubuntu: `sudo bash deploy.sh` (installs Node 20, builds, runs as a systemd service on port 3000).
+With a domain and HTTPS: `sudo DOMAIN=ide.example.com EMAIL=me@example.com bash deploy.sh`. Re-run to update.
+Other hosts: `npm ci && npm run build && npm start` behind any reverse proxy that keeps response headers intact.
 Note: projects are stored per browser (IndexedDB); cloud sync/accounts are Phase 3.
 
 ## Features
