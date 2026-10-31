@@ -43,9 +43,12 @@ echo "node $(node -v), npm $(npm -v)"
 
 log "Fetching code ($BRANCH)"
 id "$APP_USER" >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin "$APP_USER"
+# The checkout is owned by $APP_USER, so root must be told explicitly that this directory is trusted
+# (otherwise git refuses with "detected dubious ownership" on every update).
+GIT="git -c safe.directory=$APP_DIR"
 if [ -d "$APP_DIR/.git" ]; then
-  git -C "$APP_DIR" fetch origin "$BRANCH"
-  git -C "$APP_DIR" checkout -B "$BRANCH" "origin/$BRANCH"
+  $GIT -C "$APP_DIR" fetch origin "$BRANCH"
+  $GIT -C "$APP_DIR" checkout -f -B "$BRANCH" "origin/$BRANCH"
 else
   git clone --branch "$BRANCH" "$REPO_URL" "$APP_DIR"
 fi
