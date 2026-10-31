@@ -1,0 +1,31 @@
+@import "tailwindcss";
+@import "@webide/ui/theme.css";
+@source "../../../packages/ui/src";
+
+@theme inline {
+  --color-ide-bg: var(--ide-bg);
+  --color-ide-panel: var(--ide-panel);
+  --color-ide-panel-2: var(--ide-panel-2);
+  --color-ide-border: var(--ide-border);
+  --color-ide-text: var(--ide-text);
+  --color-ide-muted: var(--ide-muted);
+  --color-ide-hover: var(--ide-hover);
+  --color-ide-active: var(--ide-active);
+  --color-ide-accent: var(--ide-accent);
+  --color-ide-accent-fg: var(--ide-accent-fg);
+  --color-ide-danger: var(--ide-danger);
+  --color-ide-warn: var(--ide-warn);
+  --color-ide-ok: var(--ide-ok);
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: #181818;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  scrollbar-color: #3a4556 transparent;
+}

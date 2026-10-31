@@ -1,0 +1,33 @@
+/* Design tokens (VS Code "Dark Modern" / "Light Modern" inspired). Scoped so the IDE can be embedded anywhere. */
+[data-ide-theme="dark"] {
+  --ide-bg: #1f1f1f;          /* editor */
+  --ide-panel: #181818;       /* sidebar, activity bar, panel, title/status bar */
+  --ide-panel-2: #1f1f1f;     /* inputs, menus */
+  --ide-border: #2b2b2b;
+  --ide-text: #cccccc;
+  --ide-muted: #969696;
+  --ide-hover: #2a2d2e;
+  --ide-active: #37373d;
+  --ide-accent: #007acc;
+  --ide-accent-fg: #ffffff;
+  --ide-danger: #f85149;
+  --ide-warn: #cca700;
+  --ide-ok: #3fb950;
+  color-scheme: dark;
+}
+[data-ide-theme="light"] {
+  --ide-bg: #ffffff;
+  --ide-panel: #f8f8f8;
+  --ide-panel-2: #ffffff;
+  --ide-border: #e5e5e5;
+  --ide-text: #3b3b3b;
+  --ide-muted: #717171;
+  --ide-hover: #f0f0f0;
+  --ide-active: #e4e6f1;
+  --ide-accent: #005fb8;
+  --ide-accent-fg: #ffffff;
+  --ide-danger: #c4291f;
+  --ide-warn: #7a5f00;
+  --ide-ok: #1a7f37;
+  color-scheme: light;
+}
