@@ -4,7 +4,10 @@
 #   sudo bash deploy.sh                                   # http://SERVER_IP:3000
 #   sudo DOMAIN=ide.example.com EMAIL=me@example.com bash deploy.sh   # Nginx + HTTPS (Let's Encrypt)
 #
-# Optional variables: PORT (3000), BRANCH, REPO_URL, APP_DIR (/opt/webide)
+#   sudo LOCAL_ONLY=1 PORT=3000 bash deploy.sh           # behind an existing reverse proxy (Caddy, Nginx…):
+#                                                         # listens on 127.0.0.1 only, opens no firewall port
+#
+# Optional variables: PORT (3000), BRANCH, REPO_URL, APP_DIR (/opt/webide), LOCAL_ONLY (0)
 set -euo pipefail
 
 PORT="${PORT:-3000}"
@@ -13,6 +16,7 @@ REPO_URL="${REPO_URL:-https://github.com/mygummy0/project.git}"
 APP_DIR="${APP_DIR:-/opt/webide}"
 DOMAIN="${DOMAIN:-}"
 EMAIL="${EMAIL:-}"
+LOCAL_ONLY="${LOCAL_ONLY:-0}"
 APP_USER="webide"
 
 log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
@@ -53,7 +57,7 @@ runuser -u "$APP_USER" -- bash -c "cd '$APP_DIR' && npm ci --no-audit --no-fund 
 
 # With a domain, Next.js listens on localhost only and Nginx is the public entry point.
 HOST="0.0.0.0"
-[ -z "$DOMAIN" ] || HOST="127.0.0.1"
+{ [ -n "$DOMAIN" ] || [ "$LOCAL_ONLY" = 1 ]; } && HOST="127.0.0.1"
 
 log "Creating systemd service"
 cat >/etc/systemd/system/webide.service <<EOF
@@ -81,7 +85,9 @@ systemctl daemon-reload
 systemctl enable webide >/dev/null
 systemctl restart webide
 
-if [ -n "$DOMAIN" ]; then
+if [ "$LOCAL_ONLY" = 1 ] && [ -z "$DOMAIN" ]; then
+  URL="(served by your reverse proxy -> http://127.0.0.1:$PORT)"
+elif [ -n "$DOMAIN" ]; then
   log "Configuring Nginx + HTTPS for $DOMAIN"
   apt-get install -y nginx certbot python3-certbot-nginx
   cat >"/etc/nginx/sites-available/webide" <<EOF
@@ -131,5 +137,5 @@ log "Done"
 echo "Open:      $URL/editor/demo-project"
 echo "Logs:      journalctl -u webide -f"
 echo "Update:    sudo bash $APP_DIR/deploy.sh"
-[ -z "$DOMAIN" ] && echo "Note: without a domain the site is plain HTTP; some browser features work best over HTTPS."
+[ -z "$DOMAIN" ] && [ "$LOCAL_ONLY" != 1 ] && echo "Note: without a domain the site is plain HTTP; some browser features work best over HTTPS."
 exit 0
