@@ -22,6 +22,9 @@ export interface EditorViewProps {
   theme: ThemeName;
   readOnly: boolean;
   fontSize?: number;
+  /** Distinguishes several editors showing the same files (split view) for cursor/scroll state. */
+  viewScope?: string;
+  onFocus?(): void;
   onReady(api: EditorApi): void;
   onCursorChange(cursor: CursorInfo): void;
   onSaveRequested(): void;

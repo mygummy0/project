@@ -115,27 +115,108 @@ for (let i = 0; i < 10; i++) {
   },
   {
     id: "typescript",
-    name: "TypeScript (editing only)",
-    description: "Full TypeScript diagnostics and completion. Execution arrives in a later phase.",
+    name: "TypeScript script",
+    description: "TypeScript with multiple modules, executed in an isolated Web Worker.",
     language: "typescript",
     entry: "/src/index.ts",
-    runnable: false,
+    runnable: true,
     files: [
       {
         path: "/src/index.ts",
-        content: `interface User {
+        content: `import { greet, type User } from "./greet";
+
+const users: User[] = [
+  { id: 1, name: "Ada" },
+  { id: 2, name: "Linus" },
+];
+
+for (const user of users) {
+  console.log(greet(user));
+}
+`,
+      },
+      {
+        path: "/src/greet.ts",
+        content: `export interface User {
   id: number;
   name: string;
 }
 
 export function greet(user: User): string {
-  return \`Hello, \${user.name}!\`;
+  return \`Hello, \${user.name}! (#\${user.id})\`;
 }
-
-console.log(greet({ id: 1, name: "World" }));
 `,
       },
-      { path: "/README.md", content: "# TypeScript project\n\nType checking and IntelliSense work in the editor.\nRunning TypeScript requires a bundler runtime that is planned for Phase 2.\n" },
+    ],
+  },
+  {
+    id: "react-ts",
+    name: "React + TypeScript",
+    description: "React 18 app with TSX, CSS imports and live preview (packages load from esm.sh).",
+    language: "typescriptreact",
+    entry: "/src/App.tsx",
+    runnable: true,
+    files: [
+      {
+        path: "/index.html",
+        content: `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+`,
+      },
+      {
+        path: "/package.json",
+        content: JSON.stringify({ name: "react-app", private: true, dependencies: { react: "18.3.1", "react-dom": "18.3.1" } }, null, 2) + "\n",
+      },
+      {
+        path: "/src/main.tsx",
+        content: `import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./styles.css";
+
+createRoot(document.getElementById("root")!).render(<App />);
+`,
+      },
+      {
+        path: "/src/App.tsx",
+        content: `import { useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+  return (
+    <main>
+      <h1>React + TypeScript</h1>
+      <button onClick={() => setCount((c) => c + 1)}>Count: {count}</button>
+    </main>
+  );
+}
+`,
+      },
+      {
+        path: "/src/styles.css",
+        content: `body {
+  margin: 0;
+  font-family: system-ui, sans-serif;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+button {
+  font-size: 1rem;
+  padding: 0.5rem 1rem;
+}
+`,
+      },
     ],
   },
   {

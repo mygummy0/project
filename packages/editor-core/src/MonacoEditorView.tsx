@@ -11,7 +11,7 @@ import type { EditorApi, EditorViewProps } from "./types";
  * the view never disposes user content - only the editor widget.
  */
 export function MonacoEditorView(props: EditorViewProps) {
-  const { monaco, models, activePath, theme, readOnly, fontSize = 14 } = props;
+  const { monaco, models, activePath, theme, readOnly, fontSize = 14, viewScope = "" } = props;
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Monaco.editor.IStandaloneCodeEditor | null>(null);
   const currentPath = useRef<string | null>(null);
@@ -51,6 +51,7 @@ export function MonacoEditorView(props: EditorViewProps) {
         const selectedChars = sel && model ? model.getValueInRange(sel).length : 0;
         cb.current.onCursorChange({ line: e.position.lineNumber, column: e.position.column, selectedChars });
       }),
+      editor.onDidFocusEditorText(() => cb.current.onFocus?.()),
       editor.addAction({
         id: "webide.save",
         label: "Save File",
@@ -88,7 +89,7 @@ export function MonacoEditorView(props: EditorViewProps) {
 
     return () => {
       const p = currentPath.current;
-      if (p) models.saveViewState(p, editor);
+      if (p) models.saveViewState(p, editor, viewScope);
       subs.forEach((s) => s.dispose());
       editor.setModel(null); // detach before disposing so the model survives
       editor.dispose();
@@ -104,15 +105,14 @@ export function MonacoEditorView(props: EditorViewProps) {
     const editor = editorRef.current;
     if (!editor) return;
     const prev = currentPath.current;
-    if (prev && prev !== activePath) models.saveViewState(prev, editor);
+    if (prev && prev !== activePath) models.saveViewState(prev, editor, viewScope);
     currentPath.current = activePath;
     const model = activePath ? models.get(activePath) : undefined;
     editor.setModel(model ?? null);
     if (activePath && model) {
-      models.restoreViewState(activePath, editor);
-      editor.focus();
+      models.restoreViewState(activePath, editor, viewScope);
     }
-  }, [activePath, models, monaco]);
+  }, [activePath, models, monaco, viewScope]);
 
   useEffect(() => {
     monaco.editor.setTheme(THEME_IDS[theme]);

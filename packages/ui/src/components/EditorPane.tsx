@@ -5,14 +5,14 @@ import { MonacoEditorView } from "@webide/editor-core";
 import { errorMessage } from "@webide/shared";
 import { useIde, useSession } from "../context";
 
-export function EditorPane() {
+export function EditorPane({ group = 0 }: { group?: number }) {
   const session = useSession();
   const ready = useIde((s) => s.monacoReady);
-  const activePath = useIde((s) => s.activePath);
+  const activePath = useIde((s) => s.groups[group]?.active ?? null);
   const theme = useIde((s) => s.theme);
   const readOnly = useIde((s) => s.readOnly);
   const fontSize = useIde((s) => s.settings.fontSize);
-  const conflict = useIde((s) => (s.activePath ? s.conflicts[s.activePath] : false));
+  const conflict = useIde((s) => (activePath ? s.conflicts[activePath] : false));
   const reveal = useIde((s) => s.reveal);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -24,10 +24,11 @@ export function EditorPane() {
 
   // Child effects (model switch) run before this one, so the model is already set.
   useEffect(() => {
-    if (reveal && reveal.path === activePath && session.editor) {
-      session.editor.revealPosition(reveal.line, reveal.column);
+    const api = session.editors[group];
+    if (reveal && reveal.group === group && reveal.path === activePath && api) {
+      api.revealPosition(reveal.line, reveal.column);
     }
-  }, [reveal, activePath, session]);
+  }, [reveal, activePath, session, group]);
 
   if (loadError) {
     return (
@@ -64,7 +65,9 @@ export function EditorPane() {
           theme={theme}
           readOnly={readOnly}
           fontSize={fontSize}
-          onReady={(api) => session.setEditorApi(api)}
+          viewScope={String(group)}
+          onFocus={() => session.focusGroup(group)}
+          onReady={(api) => session.setEditorApi(api, group)}
           onCursorChange={(c) => session.setCursor(c)}
           onSaveRequested={() => void session.saveActive()}
           onRunRequested={() => void session.run()}

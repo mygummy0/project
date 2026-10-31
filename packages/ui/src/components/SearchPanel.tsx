@@ -8,7 +8,10 @@ export function SearchPanel() {
   const session = useSession();
   const files = useIde((s) => s.files);
   const dirty = useIde((s) => s.dirty);
+  const readOnly = useIde((s) => s.readOnly);
   const [query, setQuery] = useState("");
+  const [replacement, setReplacement] = useState("");
+  const [showReplace, setShowReplace] = useState(false);
   const [caseSensitive, setCase] = useState(false);
   const [regex, setRegex] = useState(false);
   const [wholeWord, setWord] = useState(false);
@@ -26,12 +29,30 @@ export function SearchPanel() {
     return [...m];
   }, [result]);
 
+  const opts = { caseSensitive, regex, wholeWord };
+  const replace = (path?: string) => {
+    session.replaceInFiles(query, replacement, opts, path);
+    setResult(session.search(query, opts));
+  };
   const toggle = (on: boolean) => `rounded px-1.5 py-0.5 text-xs font-mono ${on ? "bg-ide-accent text-ide-accent-fg" : "text-ide-muted hover:bg-ide-hover"}`;
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex h-[35px] items-center pl-5 text-[11px] uppercase text-ide-muted">Search</div>
       <div className="space-y-1 px-3 pb-2">
+        <div className="flex gap-1">
+          {!readOnly && (
+            <button
+              className="w-4 shrink-0 text-ide-muted hover:text-ide-text"
+              title="Toggle Replace"
+              aria-label="Toggle replace"
+              aria-expanded={showReplace}
+              onClick={() => setShowReplace((v) => !v)}
+            >
+              {showReplace ? "▾" : "▸"}
+            </button>
+          )}
+          <div className="min-w-0 flex-1 space-y-1">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -39,6 +60,28 @@ export function SearchPanel() {
           aria-label="Search query"
           className="w-full rounded-[3px] border border-ide-border bg-ide-panel-2 px-2 py-0.5 text-[13px] outline-none focus:border-ide-accent"
         />
+        {showReplace && (
+          <div className="flex gap-1">
+            <input
+              value={replacement}
+              onChange={(e) => setReplacement(e.target.value)}
+              placeholder="Replace"
+              aria-label="Replacement"
+              className="min-w-0 flex-1 rounded-[3px] border border-ide-border bg-ide-panel-2 px-2 py-0.5 text-[13px] outline-none focus:border-ide-accent"
+              onKeyDown={(e) => e.key === "Enter" && (e.ctrlKey || e.metaKey) && replace()}
+            />
+            <button
+              className="rounded-[3px] px-1.5 text-xs text-ide-muted hover:bg-ide-hover hover:text-ide-text disabled:opacity-40"
+              title="Replace All (Ctrl+Enter)"
+              disabled={!query || result.matches.length === 0 || !!result.error}
+              onClick={() => replace()}
+            >
+              All
+            </button>
+          </div>
+        )}
+          </div>
+        </div>
         <div className="flex gap-1">
           <button className={toggle(caseSensitive)} title="Match case" onClick={() => setCase((v) => !v)}>Aa</button>
           <button className={toggle(wholeWord)} title="Whole word" onClick={() => setWord((v) => !v)}>ab</button>
@@ -54,7 +97,14 @@ export function SearchPanel() {
       <div className="min-h-0 flex-1 overflow-auto pb-4">
         {groups.map(([path, ms]) => (
           <div key={path}>
-            <div className="truncate px-3 py-1 text-xs font-semibold">{path}</div>
+            <div className="group flex items-center justify-between px-3 py-1 text-xs font-semibold">
+              <span className="truncate">{path}</span>
+              {showReplace && !readOnly && (
+                <button className="hidden text-ide-muted hover:text-ide-text group-hover:block" title="Replace in this file" onClick={() => replace(path)}>
+                  Replace
+                </button>
+              )}
+            </div>
             {ms.map((m, i) => (
               <button
                 key={i}

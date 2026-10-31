@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { Fragment, useEffect, useRef, useSyncExternalStore } from "react";
 import { useIde, useSession } from "../context";
 import { IconClose, IconFiles, IconGear, IconSearch } from "../icons";
 import { SettingsPanel } from "./SettingsPanel";
@@ -72,6 +72,12 @@ function useShortcuts(features: WorkbenchFeatures) {
       else if (mod && k === ",") session.openSettings();
       else if (mod && !e.shiftKey && k === "s") void session.saveActive();
       else if (mod && k === "enter") void session.run();
+      else if (mod && !e.shiftKey && e.key === "\\") session.splitEditor();
+      else if (mod && !e.shiftKey && (k === "1" || k === "2")) {
+        const g = Number(k) - 1;
+        session.focusGroup(g);
+        session.editors[g]?.focus();
+      }
       else if (e.altKey && !mod && k === "w") {
         const p = session.state.activePath;
         if (p) void session.closeTab(p);
@@ -87,6 +93,9 @@ export function Workbench({ showExplorer, showBottomPanel, showPreview }: Workbe
   const session = useSession();
   const layout = useIde((s) => s.layout);
   const mobileView = useIde((s) => s.mobileView);
+  const groupCount = useIde((s) => s.groups.length);
+  const activeGroup = useIde((s) => s.activeGroup);
+  const groupsRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   useShortcuts({ showExplorer, showBottomPanel, showPreview });
 
@@ -123,8 +132,8 @@ export function Workbench({ showExplorer, showBottomPanel, showPreview }: Workbe
         {pane(
           "editor",
           <>
-            <TabBar />
-            <div className="min-h-0 flex-1 bg-ide-bg"><EditorPane /></div>
+            <TabBar group={activeGroup} />
+            <div className="min-h-0 flex-1 bg-ide-bg"><EditorPane key={activeGroup} group={activeGroup} /></div>
           </>,
         )}
         {showPreview && pane("preview", <PreviewPane />)}
@@ -179,8 +188,29 @@ export function Workbench({ showExplorer, showBottomPanel, showPreview }: Workbe
           </>
         )}
         <main className="flex min-w-0 flex-1 flex-col">
-          <TabBar />
-          <div className="min-h-0 flex-1 bg-ide-bg"><EditorPane /></div>
+          <div ref={groupsRef} className="flex min-h-0 flex-1">
+            {Array.from({ length: groupCount }, (_, i) => (
+              <Fragment key={i}>
+                {i > 0 && (
+                  <ResizeHandle
+                    axis="x"
+                    onResize={(d) => {
+                      const w = groupsRef.current?.clientWidth || 1;
+                      session.setLayout({ splitRatio: clamp(layout.splitRatio + d / w, 0.2, 0.8) });
+                    }}
+                  />
+                )}
+                <div
+                  className={`flex min-w-0 flex-col ${i > 0 ? "border-l border-ide-border" : ""}`}
+                  style={{ flex: groupCount > 1 ? `${i === 0 ? layout.splitRatio : 1 - layout.splitRatio} 1 0` : "1 1 0" }}
+                  onPointerDown={() => session.focusGroup(i)}
+                >
+                  <TabBar group={i} />
+                  <div className="min-h-0 flex-1 bg-ide-bg"><EditorPane group={i} /></div>
+                </div>
+              </Fragment>
+            ))}
+          </div>
           {showBottomPanel && layout.bottomOpen && (
             <>
               <ResizeHandle axis="y" onResize={(d) => session.setLayout({ bottomHeight: clamp(layout.bottomHeight - d, 80, 640) })} />

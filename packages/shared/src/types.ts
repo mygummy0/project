@@ -34,6 +34,8 @@ export interface LayoutState {
   bottomOpen: boolean;
   bottomTab: "console" | "problems" | "output";
   sidebarWidth: number;
+  /** Width share of the first editor group when split (0.2 – 0.8). */
+  splitRatio: number;
   previewWidth: number;
   bottomHeight: number;
 }
@@ -45,14 +47,18 @@ export const DEFAULT_LAYOUT: LayoutState = {
   bottomOpen: true,
   bottomTab: "console",
   sidebarWidth: 240,
+  splitRatio: 0.5,
   previewWidth: 420,
   bottomHeight: 200,
 };
 
 /** Restorable "last working state" of a project. */
 export interface WorkspaceState {
+  /** Tabs of the first group (kept for backwards compatibility). */
   openTabs: string[];
   activePath: string | null;
+  groups?: { tabs: string[]; active: string | null }[];
+  activeGroup?: number;
   layout: Partial<LayoutState>;
   theme?: ThemeName;
 }

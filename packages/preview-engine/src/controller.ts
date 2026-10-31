@@ -110,6 +110,7 @@ export class PreviewController {
     this.token = Math.random().toString(36).slice(2) + Date.now().toString(36);
     const build = buildPreviewDocument(this.getFiles(), { token: this.token, entry: this.entry });
     for (const w of build.warnings) this.events.emit("log", { kind: "system", level: "warn", text: w });
+    for (const e of build.errors) this.events.emit("log", { kind: "system", level: "error", text: e });
     if (build.error) {
       this.events.emit("log", { kind: "system", level: "error", text: build.error });
       this.setStatus("error");

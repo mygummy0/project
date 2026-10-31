@@ -15,7 +15,7 @@ export function PreviewPane() {
   const session = useSession();
   const status = useIde((s) => s.previewStatus);
   const runtime = useIde((s) => s.runtimeStatus);
-  const runnable = useIde((s) => s.runnable);
+  const hasHtml = useIde((s) => s.files.some((f) => f.kind === "file" && /\.html?$/i.test(f.path)));
   const [device, setDevice] = useState<keyof typeof DEVICES>("desktop");
   const frame = useRef<HTMLIFrameElement>(null);
 
@@ -63,7 +63,7 @@ export function PreviewPane() {
         </div>
         {status === "idle" && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-ide-bg p-6 text-center text-sm text-ide-muted">
-            {runnable ? (
+            {hasHtml ? (
               <>
                 <p>{runtime === "error" ? "Nothing to preview for this project." : "Preview is stopped."}</p>
                 <button className="text-ide-accent hover:underline" onClick={() => void session.run()}>
@@ -71,7 +71,7 @@ export function PreviewPane() {
                 </button>
               </>
             ) : (
-              <p>No preview available for this project type.</p>
+              <p>No HTML file to preview. Scripts run in the Console (Ctrl+Enter).</p>
             )}
           </div>
         )}

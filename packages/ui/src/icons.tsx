@@ -34,3 +34,4 @@ export const IconWarn = () => <Svg><path d="M8 2.5 14 13H2z" /><path d="M8 6.5v3
 export const IconError = () => <Svg><circle cx="8" cy="8" r="5.5" /><path d="m5.8 5.8 4.4 4.4M10.2 5.8l-4.4 4.4" /></Svg>;
 export const IconInfo = () => <Svg><circle cx="8" cy="8" r="5.5" /><path d="M8 7.2V11M8 5v.1" /></Svg>;
 export const IconGear = () => <Svg><circle cx="8" cy="8" r="2" /><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1" /></Svg>;
+export const IconSplit = () => <Svg><rect x="2" y="3" width="12" height="10" rx="1" /><path d="M8 3v10" /></Svg>;

@@ -9,6 +9,7 @@ import {
 import type { CursorInfo } from "@webide/editor-core";
 import type { OutputEntry, RuntimeStatus } from "@webide/runtime-engine";
 import type { PreviewStatus } from "@webide/preview-engine";
+import type { EditorGroup } from "./groups";
 
 export interface Problem {
   path: string;
@@ -30,6 +31,7 @@ export interface Notice {
 
 export interface RevealRequest {
   id: number;
+  group: number;
   path: string;
   line: number;
   column: number;
@@ -50,7 +52,9 @@ export interface IdeState {
   project: ProjectMeta | null;
   readOnly: boolean;
   files: FileRecord[];
-  openTabs: string[];
+  groups: EditorGroup[];
+  activeGroup: number;
+  /** Active file of the focused group (derived, kept in sync by the session). */
   activePath: string | null;
   dirty: Record<string, true>;
   conflicts: Record<string, true>;
@@ -82,7 +86,8 @@ export function createIdeStore(init: { theme: ThemeName; readOnly: boolean; layo
     project: null,
     readOnly: init.readOnly,
     files: [],
-    openTabs: [],
+    groups: [{ tabs: [], active: null }],
+    activeGroup: 0,
     activePath: null,
     dirty: {},
     conflicts: {},

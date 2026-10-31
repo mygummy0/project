@@ -41,7 +41,11 @@ export function configureMonacoLanguages(monaco: MonacoApi): void {
     checkJs: false,
     jsx: ts.JsxEmit.Preserve,
     esModuleInterop: true,
+    resolveJsonModule: true,
     strict: true,
+    // npm packages are typed as `any` until real typings are fetched (see buildAmbientTypes),
+    // which would otherwise flag every callback parameter as implicit any.
+    noImplicitAny: false,
     noEmit: true,
     lib: ["es2020", "dom", "dom.iterable"],
   };
@@ -59,4 +63,31 @@ export function configureMonacoLanguages(monaco: MonacoApi): void {
     allowComments: true,
     enableSchemaRequest: false, // never fetch remote schemas on behalf of user files
   });
+}
+
+/**
+ * Ambient declarations so npm imports listed in /package.json and CSS imports
+ * type-check without downloading real typings (they resolve to `any`).
+ * Call again whenever package.json changes.
+ */
+export function buildAmbientTypes(packageJson: string | undefined): string {
+  let deps: string[] = [];
+  try {
+    const pkg = packageJson ? (JSON.parse(packageJson) as { dependencies?: object; devDependencies?: object }) : {};
+    deps = [...Object.keys(pkg.dependencies ?? {}), ...Object.keys(pkg.devDependencies ?? {})];
+  } catch {
+    /* invalid package.json: the JSON language service reports it */
+  }
+  const lines = ['declare module "*.css";', "declare namespace JSX { interface IntrinsicElements { [name: string]: any } }"];
+  for (const d of deps) {
+    if (!/^(@[\w.-]+\/)?[\w.-]+$/.test(d)) continue;
+    lines.push(`declare module "${d}";`, `declare module "${d}/*";`);
+  }
+  return lines.join("\n");
+}
+
+export function updateProjectTypes(monaco: MonacoApi, packageJson: string | undefined): void {
+  const lib = [{ content: buildAmbientTypes(packageJson), filePath: "file:///__webide/ambient.d.ts" }];
+  monaco.typescript.typescriptDefaults.setExtraLibs(lib);
+  monaco.typescript.javascriptDefaults.setExtraLibs(lib);
 }

@@ -40,4 +40,23 @@ describe("buildPreviewDocument", () => {
     const b = buildPreviewDocument(files({ "/index.html": "<head></head><script>var a=1</script>" }), { token: "T" });
     expect(b.html).toContain("<script>var a=1</script>");
   });
+  it("bundles TSX entry scripts and module scripts", () => {
+    const b = buildPreviewDocument(
+      files({
+        "/index.html": `<head></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body>`,
+        "/src/main.tsx": `import { msg } from "./msg"; import "./app.css"; document.getElementById("root")!.textContent = msg;`,
+        "/src/msg.ts": `export const msg: string = "hi";`,
+        "/src/app.css": `body{color:red}`,
+      }),
+      { token: "T" },
+    );
+    expect(b.errors).toEqual([]);
+    expect(b.html).toContain('"/src/msg.ts"');
+    expect(b.html).not.toContain(' src="/src/main.tsx"');
+  });
+  it("shows module build errors", () => {
+    const b = buildPreviewDocument(files({ "/index.html": `<body><script src="a.ts"></script></body>`, "/a.ts": `import "./nope";` }), { token: "T" });
+    expect(b.errors[0]).toMatch(/Cannot resolve/);
+    expect(b.html).toContain("Build failed");
+  });
 });

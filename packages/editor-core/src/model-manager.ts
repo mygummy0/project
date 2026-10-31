@@ -17,7 +17,8 @@ export interface ModelManagerEvents {
 export class ModelManager {
   readonly events = new Emitter<ModelManagerEvents>();
   private models = new Map<string, { model: Monaco.editor.ITextModel; sub: Monaco.IDisposable }>();
-  private viewStates = new Map<string, Monaco.editor.ICodeEditorViewState | null>();
+  /** path → (editor scope, e.g. split group) → view state. */
+  private viewStates = new Map<string, Map<string, Monaco.editor.ICodeEditorViewState | null>>();
   private disposed = false;
 
   constructor(
@@ -86,12 +87,14 @@ export class ModelManager {
     this.viewStates.delete(path);
   }
 
-  saveViewState(path: string, editor: Monaco.editor.IStandaloneCodeEditor): void {
-    this.viewStates.set(path, editor.saveViewState());
+  saveViewState(path: string, editor: Monaco.editor.IStandaloneCodeEditor, scope = ""): void {
+    let byScope = this.viewStates.get(path);
+    if (!byScope) this.viewStates.set(path, (byScope = new Map()));
+    byScope.set(scope, editor.saveViewState());
   }
 
-  restoreViewState(path: string, editor: Monaco.editor.IStandaloneCodeEditor): void {
-    const vs = this.viewStates.get(path);
+  restoreViewState(path: string, editor: Monaco.editor.IStandaloneCodeEditor, scope = ""): void {
+    const vs = this.viewStates.get(path)?.get(scope);
     if (vs) editor.restoreViewState(vs);
   }
 

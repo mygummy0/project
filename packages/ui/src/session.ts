@@ -18,6 +18,7 @@ import {
   VirtualFileSystem,
   exportProjectZip,
   importProjectZip,
+  buildMatcher,
   searchFiles,
   type SearchOptions,
   type SearchResult,
@@ -26,6 +27,8 @@ import { ProjectService, getTemplate, templateForLanguage } from "@webide/projec
 import { ModelManager, loadMonaco, type EditorApi } from "@webide/editor-core";
 import { PreviewController } from "@webide/preview-engine";
 import { BrowserPreviewAdapter, JsWorkerAdapter, RuntimeManager, type OutputEntry } from "@webide/runtime-engine";
+import * as G from "./groups";
+import { updateProjectTypes } from "@webide/language-engine";
 import { DEFAULT_SETTINGS, createIdeStore, type IdeState, type IdeStore, type Problem, type Settings } from "./store";
 
 export interface SessionOptions {
@@ -57,7 +60,8 @@ export class IdeSession {
   readonly runtime = new RuntimeManager();
   monaco: typeof Monaco | null = null;
   models: ModelManager | null = null;
-  editor: EditorApi | null = null;
+  /** Imperative editor handle per group. */
+  editors: (EditorApi | null)[] = [];
 
   private storage: StorageAdapter;
   private projects!: ProjectService;
@@ -107,14 +111,14 @@ export class IdeSession {
       const ws = await this.projects.loadWorkspace(meta.id);
       const files = fs.listFiles().map((f) => f.path);
       const tpl = getTemplate(meta.templateId);
-      let openTabs = (ws?.openTabs ?? []).filter((p) => files.includes(p));
-      let activePath = ws?.activePath && openTabs.includes(ws.activePath) ? ws.activePath : (openTabs[0] ?? null);
-      if (openTabs.length === 0) {
+      const savedGroups = ws?.groups ?? [{ tabs: ws?.openTabs ?? [], active: ws?.activePath ?? null }];
+      let groups = G.mapPaths(
+        { groups: savedGroups, activeGroup: ws?.activeGroup ?? 0 },
+        (p) => (files.includes(p) ? p : null),
+      );
+      if (G.allPaths(groups).length === 0) {
         const first = tpl?.entry && fs.exists(tpl.entry) ? tpl.entry : files[0];
-        if (first) {
-          openTabs = [first];
-          activePath = first;
-        }
+        groups = first ? G.openIn(G.emptyGroups(), first) : G.emptyGroups();
       }
 
       this.loadSettings();
@@ -125,10 +129,15 @@ export class IdeSession {
         project: meta,
         readOnly: s.readOnly || !canWrite,
         files: fs.list(),
-        openTabs,
-        activePath,
+        ...this.groupPatch(groups),
         theme: this.opts.theme ?? ws?.theme ?? s.theme,
-        layout: { ...s.layout, ...(ws?.layout ?? {}), ...(this.opts.layout ?? {}) },
+        layout: {
+          ...s.layout,
+          // Script-only projects have nothing to preview: start with the preview closed.
+          ...(ws ? {} : { previewOpen: files.some((p) => /\.html?$/i.test(p)) }),
+          ...(ws?.layout ?? {}),
+          ...(this.opts.layout ?? {}),
+        },
         runnable: tpl?.runnable ?? true,
       }));
       this.disposers.push(this.store.subscribe((s, p) => this.maybePersistWorkspace(s, p)));
@@ -149,7 +158,7 @@ export class IdeSession {
     const models = new ModelManager(monaco, this.fs.projectId);
     this.models = models;
     for (const f of this.fs.listFiles()) {
-      if (f.content.length <= MAX_EAGER_MODEL_CHARS || this.state.openTabs.includes(f.path)) {
+      if (f.content.length <= MAX_EAGER_MODEL_CHARS || G.allPaths(this.state).includes(f.path)) {
         models.ensure(f.path, f.content);
       }
     }
@@ -157,6 +166,7 @@ export class IdeSession {
     const markerSub = monaco.editor.onDidChangeMarkers(() => this.refreshProblems());
     this.disposers.push(() => markerSub.dispose());
     this.recoverUnsaved();
+    updateProjectTypes(monaco, this.fs.get("/package.json") ? this.snapshot().get("/package.json") : undefined);
     this.set({ monacoReady: true });
     this.refreshProblems();
   }
@@ -212,13 +222,20 @@ export class IdeSession {
   // ───────────────────────── workspace state ─────────────────────────
 
   private maybePersistWorkspace(s: IdeState, prev: IdeState) {
-    if (s.openTabs === prev.openTabs && s.activePath === prev.activePath && s.layout === prev.layout && s.theme === prev.theme) return;
+    if (s.groups === prev.groups && s.activeGroup === prev.activeGroup && s.layout === prev.layout && s.theme === prev.theme) return;
     if (s.phase !== "ready" || !s.project) return;
     if (this.persistTimer) clearTimeout(this.persistTimer);
     this.persistTimer = setTimeout(() => {
       const st = this.state;
       void this.projects
-        .saveWorkspace(st.project!.id, { openTabs: st.openTabs, activePath: st.activePath, layout: st.layout, theme: st.theme })
+        .saveWorkspace(st.project!.id, {
+          openTabs: st.groups[0]?.tabs ?? [],
+          activePath: st.groups[0]?.active ?? null,
+          groups: st.groups,
+          activeGroup: st.activeGroup,
+          layout: st.layout,
+          theme: st.theme,
+        })
         .catch(() => undefined);
     }, 400);
   }
@@ -250,12 +267,35 @@ export class IdeSession {
     this.set({ settingsOpen: open });
   }
 
-  async closeOthers(keep: string) {
-    for (const p of this.state.openTabs.filter((t) => t !== keep)) await this.closeTab(p);
-    this.setActive(keep);
+  async closeOthers(keep: string, group = this.state.activeGroup) {
+    const tabs = this.state.groups[group]?.tabs ?? [];
+    for (const p of tabs.filter((t) => t !== keep)) await this.closeTab(p, group);
+    this.setActive(keep, group);
   }
-  async closeAll() {
-    for (const p of [...this.state.openTabs]) await this.closeTab(p);
+  async closeAll(group = this.state.activeGroup) {
+    const target = this.state.groups[group];
+    for (const p of [...(target?.tabs ?? [])]) await this.closeTab(p, this.state.groups.indexOf(target!));
+  }
+
+  // ───────────────────────── editor groups ─────────────────────────
+
+  private groupPatch(g: G.GroupsState): Partial<IdeState> {
+    return { groups: g.groups, activeGroup: g.activeGroup, activePath: g.groups[g.activeGroup]?.active ?? null };
+  }
+  private applyGroups(fn: (g: G.GroupsState) => G.GroupsState, extra: Partial<IdeState> = {}) {
+    const before = this.state;
+    const next = fn({ groups: before.groups, activeGroup: before.activeGroup });
+    this.editors.length = next.groups.length;
+    this.set({ ...this.groupPatch(next), ...extra });
+  }
+  splitEditor() {
+    this.applyGroups(G.split);
+  }
+  focusGroup(group: number) {
+    if (group !== this.state.activeGroup && this.state.groups[group]) this.applyGroups((g) => ({ ...g, activeGroup: group }));
+  }
+  get editor(): EditorApi | null {
+    return this.editors[this.state.activeGroup] ?? null;
   }
 
   setLayout(partial: Partial<LayoutState>) {
@@ -270,8 +310,8 @@ export class IdeSession {
   setCursor(cursor: IdeState["cursor"]) {
     this.set({ cursor });
   }
-  setEditorApi(api: EditorApi) {
-    this.editor = api;
+  setEditorApi(api: EditorApi, group = 0) {
+    this.editors[group] = api;
   }
 
   // ───────────────────────── snapshot ─────────────────────────
@@ -293,31 +333,24 @@ export class IdeSession {
     if (this.fs) this.set({ files: this.fs.list() });
   }
 
-  openFile(path: string, at?: { line: number; column: number }) {
+  openFile(path: string, at?: { line: number; column: number }, group = this.state.activeGroup) {
     const rec = this.fs?.get(path);
     if (!rec || rec.kind !== "file") return;
     this.models?.ensure(path, rec.content);
-    this.set((s) => ({
-      openTabs: s.openTabs.includes(path) ? s.openTabs : [...s.openTabs, path],
-      activePath: path,
+    this.applyGroups((g) => G.openIn(g, path, group), {
       mobileView: "editor",
-      reveal: at ? { id: ++this.revealId, path, line: at.line, column: at.column } : s.reveal,
-    }));
-  }
-
-  setActive(path: string) {
-    if (this.state.openTabs.includes(path)) this.set({ activePath: path });
-  }
-
-  async closeTab(path: string) {
-    if (this.state.dirty[path]) await this.autosave.flush(path);
-    this.set((s) => {
-      const idx = s.openTabs.indexOf(path);
-      if (idx < 0) return {};
-      const openTabs = s.openTabs.filter((p) => p !== path);
-      const activePath = s.activePath === path ? (openTabs[Math.min(idx, openTabs.length - 1)] ?? null) : s.activePath;
-      return { openTabs, activePath };
+      reveal: at ? { id: ++this.revealId, group, path, line: at.line, column: at.column } : this.state.reveal,
     });
+  }
+
+  setActive(path: string, group = this.state.activeGroup) {
+    this.applyGroups((g) => G.activate(g, path, group));
+  }
+
+  async closeTab(path: string, group = this.state.activeGroup) {
+    const stillOpenElsewhere = this.state.groups.some((g, i) => i !== group && g.tabs.includes(path));
+    if (this.state.dirty[path] && !stillOpenElsewhere) await this.autosave.flush(path);
+    this.applyGroups((g) => G.closeIn(g, path, group));
   }
 
   beginCreate(kind: "file" | "folder", dir = "/") {
@@ -404,14 +437,9 @@ export class IdeSession {
         const inside = (p: string) => isInside(c.path, p);
         for (const p of this.models?.paths().filter(inside) ?? []) this.models!.dispose(p);
         for (const p of Object.keys(this.state.dirty).filter(inside)) this.autosave.cancel(p);
-        this.set((s) => {
-          const openTabs = s.openTabs.filter((p) => !inside(p));
-          return {
-            openTabs,
-            activePath: s.activePath && inside(s.activePath) ? (openTabs[0] ?? null) : s.activePath,
-            dirty: omit(s.dirty, inside),
-            conflicts: omit(s.conflicts, inside),
-          };
+        this.applyGroups((g) => G.mapPaths(g, (p) => (inside(p) ? null : p)), {
+          dirty: omit(this.state.dirty, inside),
+          conflicts: omit(this.state.conflicts, inside),
         });
         break;
       }
@@ -420,10 +448,7 @@ export class IdeSession {
         for (const p of this.models?.paths().filter((q) => isInside(c.oldPath, q)) ?? []) {
           this.models!.rename(p, map(p), this.models!.value(p));
         }
-        this.set((s) => ({
-          openTabs: s.openTabs.map(map),
-          activePath: s.activePath ? map(s.activePath) : null,
-        }));
+        this.applyGroups((g) => G.mapPaths(g, map));
         break;
       }
       case "reloaded":
@@ -432,6 +457,7 @@ export class IdeSession {
     this.refreshFiles();
     this.refreshSaveStatus();
     this.runtime.notifyFilesChanged();
+    if (c.type !== "reloaded" && isInside(c.path, "/package.json")) this.refreshProjectTypes();
   }
 
   // ───────────────────────── saving ─────────────────────────
@@ -439,6 +465,7 @@ export class IdeSession {
   private onModelContent(path: string, _value: string) {
     if (this.suppressContent) return;
     if (this.state.readOnly) return;
+    if (path === "/package.json") this.refreshProjectTypes();
     this.set((s) => (s.dirty[path] ? {} : { dirty: { ...s.dirty, [path]: true } }));
     this.refreshSaveStatus();
     this.autosave.schedule(path);
@@ -594,6 +621,43 @@ export class IdeSession {
   search(query: string, opts: SearchOptions): SearchResult {
     const files: FileRecord[] = (this.fs?.listFiles() ?? []).map((f) => ({ ...f, content: this.models?.value(f.path) ?? f.content }));
     return searchFiles(files, query, opts);
+  }
+
+  /** Replaces every match in the project (or in `onlyPath`) through the editor models, so it is undoable per file. */
+  replaceInFiles(query: string, replacement: string, opts: SearchOptions, onlyPath?: string): number {
+    if (this.state.readOnly) {
+      this.notify("error", "This project is read-only");
+      return 0;
+    }
+    const models = this.models;
+    if (!models || !query) return 0;
+    const { matches, error } = this.search(query, { ...opts, maxResults: 100_000 });
+    if (error) return 0;
+    const paths = [...new Set(matches.map((m) => m.path))].filter((p) => !onlyPath || p === onlyPath);
+    let count = 0;
+    for (const path of paths) {
+      const model = models.ensure(path, this.fs!.read(path));
+      const re = buildMatcher(query, opts) as RegExp;
+      const before = model.getValue();
+      let n = 0;
+      // In regex mode "$1" etc. refer to capture groups; in plain mode the text is literal.
+      const after = before.replace(re, (...args) => {
+        n++;
+        if (!opts.regex) return replacement;
+        const groups = args.slice(1, -2) as string[];
+        return replacement.replace(/\$(\d+|&)/g, (_m, g: string) => (g === "&" ? (args[0] as string) : (groups[Number(g) - 1] ?? "")));
+      });
+      if (n > 0 && after !== before) {
+        model.pushEditOperations([], [{ range: model.getFullModelRange(), text: after }], () => null);
+        count += n;
+      }
+    }
+    if (count) this.notify("info", `Replaced ${count} occurrence(s) in ${paths.length} file(s).`);
+    return count;
+  }
+
+  private refreshProjectTypes() {
+    if (this.monaco) updateProjectTypes(this.monaco, this.snapshot().get("/package.json"));
   }
 
   // ───────────────────────── problems ─────────────────────────
