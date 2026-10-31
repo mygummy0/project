@@ -36,6 +36,7 @@ const nextConfig: NextConfig = {
     "@webide/runtime-engine",
     "@webide/preview-engine",
     "@webide/bundler",
+    "@webide/terminal-engine",
   ],
   async headers() {
     return [

@@ -20,6 +20,13 @@ export interface Problem {
   source?: string;
 }
 
+export interface TerminalTab {
+  id: number;
+  title: string;
+  status: "connecting" | "open" | "login" | "ended" | "error";
+  message?: string;
+}
+
 export type SaveStatus = "saved" | "saving" | "unsaved" | "error" | "conflict";
 export type MobileView = "files" | "editor" | "preview" | "console";
 
@@ -75,11 +82,15 @@ export interface IdeState {
   reveal: RevealRequest | null;
   /** Pending inline "new file / folder" row in the explorer. */
   creating: { kind: "file" | "folder"; dir: string } | null;
+  /** Base URL of the terminal server (e.g. "/terminal"); null hides all terminal UI. */
+  terminalUrl: string | null;
+  terminals: TerminalTab[];
+  activeTerminal: number | null;
 }
 
 export type IdeStore = StoreApi<IdeState>;
 
-export function createIdeStore(init: { theme: ThemeName; readOnly: boolean; layout?: Partial<LayoutState> }): IdeStore {
+export function createIdeStore(init: { theme: ThemeName; readOnly: boolean; layout?: Partial<LayoutState>; terminalUrl?: string }): IdeStore {
   return createStore<IdeState>(() => ({
     phase: "loading",
     error: null,
@@ -107,5 +118,8 @@ export function createIdeStore(init: { theme: ThemeName; readOnly: boolean; layo
     notice: null,
     reveal: null,
     creating: null,
+    terminalUrl: init.terminalUrl ?? null,
+    terminals: [],
+    activeTerminal: null,
   }));
 }

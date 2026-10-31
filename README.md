@@ -44,6 +44,36 @@ With a domain and HTTPS: `sudo DOMAIN=ide.example.com EMAIL=me@example.com bash 
 Other hosts: `npm ci && npm run build && npm start` behind any reverse proxy that keeps response headers intact.
 Note: projects are stored per browser (IndexedDB); cloud sync/accounts are Phase 3.
 
+## Web terminal (optional, real shell on your server)
+`services/terminal-server` (Node + node-pty + WebSocket) gives the IDE a **Terminal** tab (xterm.js, several tabs,
+touch key bar with Esc/Tab/Ctrl/arrows, `Ctrl+\`` toggles). It is off unless you enable it, and the tab is hidden when
+no server is configured. **It is remote control of your server: anyone who passes the login gets a shell as `TERMINAL_USER`.**
+
+Security design: listens on 127.0.0.1 only and is reached through your HTTPS reverse proxy at `/terminal`; password login
+(scrypt hash, never stored in plaintext; 12+ chars enforced) -> signed HttpOnly/SameSite=Strict/Secure cookie (12 h);
+WebSocket requires that cookie **and** an exact `Origin` match; 5 failed logins lock the address for 15 min; at most 4
+sessions, 30 min idle timeout; the service's own secrets are not passed to the shell; refuses to run as root.
+Use a long, unique passphrase. Stop it any time: `sudo systemctl disable --now webide-terminal`.
+
+Enable (Ubuntu, behind Caddy):
+```bash
+sudo LOCAL_ONLY=1 ENABLE_TERMINAL=1 TERMINAL_ORIGIN=https://your.domain bash /opt/webide/deploy.sh
+sudo node /opt/webide/services/terminal-server/src/set-password.mjs && sudo systemctl restart webide-terminal
+```
+Caddyfile (route `/terminal` to the terminal server, everything else to the IDE; WebSockets work out of the box):
+```
+your.domain {
+	encode zstd gzip
+	handle_path /terminal/* {
+		reverse_proxy 127.0.0.1:3001
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
+```
+Embedding: `<WebCodeEditor terminalUrl="/terminal" />` (Next app: set `NEXT_PUBLIC_TERMINAL_URL=/terminal` at build time).
+
 ## Features
 Explorer (create / rename / drag-to-move / delete, inline editing, context menu), tabs (dirty marker, close, context menu),
 Monaco with one model per file (undo, cursor and scroll kept across tab switches), find/replace, format, minimap, folding,
@@ -62,8 +92,8 @@ F1 command palette.
 
 ## Layout
 See `docs/architecture.md`. Packages: `shared`, `storage`, `file-engine`, `project-engine`, `editor-core`, `language-engine`,
-`runtime-engine`, `preview-engine`, `bundler`, `ui` (embeddable component), plus interface-only `terminal-engine`,
-`collaboration-engine`, `ai-engine`. `services/*` are intentionally not created until a real need exists.
+`runtime-engine`, `preview-engine`, `bundler`, `terminal-engine` (WebSocket backend), `ui` (embeddable component), plus
+interface-only `collaboration-engine`, `ai-engine`. `services/terminal-server` is the only server component.
 
 ## Known limitations
 - Text files only (ZIP import skips binaries); local images are not resolved in the preview.
@@ -71,7 +101,7 @@ See `docs/architecture.md`. Packages: `shared`, `storage`, `file-engine`, `proje
   runner runs under the IDE CSP). npm packages are typed as `any` (no typings download yet), so `noImplicitAny` is off.
 - Run executes the active script file (or main/index); for HTML projects it starts the preview.
 - Python, C/C++, Rust, Go need later runtimes. Mobile uses Monaco (CodeMirror 6 fallback not implemented).
-  Terminal, collaboration, AI and accounts/cloud storage are not implemented.
+  Collaboration, AI and accounts/cloud storage are not implemented. The terminal needs your own server (see above); it is not available on static hosts such as Vercel.
 - The preview runs without `allow-same-origin`, so user code cannot use localStorage/IndexedDB/cookies.
 - Models are created for every file ≤ 1 MB at load (enables cross-file IntelliSense); very large projects need lazy loading.
 - UI scale uses CSS `zoom`.

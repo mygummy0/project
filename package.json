@@ -2,7 +2,11 @@
   "name": "web-ide",
   "private": true,
   "version": "0.1.0",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
   "scripts": {
     "dev": "npm run dev -w @webide/web",
     "build": "npm run build -w @webide/web",

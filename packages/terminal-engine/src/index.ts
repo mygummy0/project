@@ -26,3 +26,5 @@ export interface TerminalBackendFactory {
   readonly unavailableReason: string | null;
   create(projectId: string, size: TerminalSize): Promise<TerminalBackend>;
 }
+
+export * from "./websocket-backend";

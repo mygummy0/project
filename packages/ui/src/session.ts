@@ -28,6 +28,7 @@ import { ModelManager, loadMonaco, type EditorApi } from "@webide/editor-core";
 import { PreviewController } from "@webide/preview-engine";
 import { BrowserPreviewAdapter, JsWorkerAdapter, RuntimeManager, type OutputEntry } from "@webide/runtime-engine";
 import * as G from "./groups";
+import { TerminalManager } from "./terminals";
 import { updateProjectTypes } from "@webide/language-engine";
 import { DEFAULT_SETTINGS, createIdeStore, type IdeState, type IdeStore, type Problem, type Settings } from "./store";
 
@@ -39,6 +40,8 @@ export interface SessionOptions {
   storage?: StorageAdapter;
   autoRun: boolean;
   previewSandboxUrl?: string;
+  /** Base URL of services/terminal-server as seen by the browser (e.g. "/terminal"). */
+  terminalUrl?: string;
   layout?: Partial<LayoutState>;
 }
 
@@ -80,7 +83,7 @@ export class IdeSession {
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly opts: SessionOptions) {
-    this.store = createIdeStore({ theme: opts.theme ?? "dark", readOnly: opts.readOnly, layout: opts.layout });
+    this.store = createIdeStore({ theme: opts.theme ?? "dark", readOnly: opts.readOnly, layout: opts.layout, terminalUrl: opts.terminalUrl });
     this.storage = opts.storage ?? new IndexedDBStorageAdapter();
     this.preview.setSandboxUrl(opts.previewSandboxUrl);
     this.autosave = new AutosaveScheduler((p) => this.saveNow(p));
@@ -179,6 +182,8 @@ export class IdeSession {
     this.autosave.dispose();
     this.preview.dispose();
     this.runtime.dispose();
+    this.terminalManager?.dispose();
+    this.terminalManager = null;
     this.disposers.forEach((d) => d());
     this.disposers = [];
     this.models?.destroy();
@@ -278,6 +283,49 @@ export class IdeSession {
     for (const p of [...(target?.tabs ?? [])]) await this.closeTab(p, this.state.groups.indexOf(target!));
   }
 
+  // ───────────────────────── terminals ─────────────────────────
+
+  private terminalManager: TerminalManager | null = null;
+  /** Armed state of the on-screen Ctrl key (UI shows it highlighted). */
+  ctrlArmed = false;
+  private ctrlListeners = new Set<() => void>();
+  onCtrlChange(fn: () => void) {
+    this.ctrlListeners.add(fn);
+    return () => this.ctrlListeners.delete(fn);
+  }
+
+  get terminals(): TerminalManager | null {
+    const url = this.state.terminalUrl;
+    if (!url || this.disposed) return null;
+    this.terminalManager ??= new TerminalManager(
+      url,
+      this.opts.projectId,
+      (terminals, activeTerminal) => this.set({ terminals, activeTerminal }),
+      (armed) => {
+        this.ctrlArmed = armed;
+        this.ctrlListeners.forEach((f) => f());
+      },
+    );
+    return this.terminalManager;
+  }
+
+  /** Opens the bottom panel on the Terminal tab and starts a shell if none exists. */
+  async showTerminal(forceNew = false) {
+    const mgr = this.terminals;
+    if (!mgr) return;
+    this.set((s) => ({ layout: { ...s.layout, bottomOpen: true, bottomTab: "terminal" }, mobileView: "console" }));
+    if (forceNew || mgr.count === 0) {
+      const id = await mgr.create();
+      if (id === null) this.notify("error", "Terminal limit reached (4)");
+    }
+  }
+
+  toggleTerminalPanel() {
+    const l = this.state.layout;
+    if (l.bottomOpen && l.bottomTab === "terminal") this.setLayout({ bottomOpen: false });
+    else void this.showTerminal();
+  }
+
   // ───────────────────────── editor groups ─────────────────────────
 
   private groupPatch(g: G.GroupsState): Partial<IdeState> {
@@ -304,6 +352,8 @@ export class IdeSession {
   }
   setTheme(theme: ThemeName) {
     this.set({ theme });
+    // Colours come from CSS variables, which update after React applies the new theme attribute.
+    requestAnimationFrame(() => this.terminalManager?.refreshTheme());
   }
   setMobileView(mobileView: IdeState["mobileView"]) {
     this.set({ mobileView });

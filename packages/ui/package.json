@@ -5,11 +5,27 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": { ".": "./src/index.ts", "./theme.css": "./src/theme.css" },
-  "dependencies": {
-    "@webide/shared": "*", "@webide/storage": "*", "@webide/file-engine": "*",
-    "@webide/project-engine": "*", "@webide/editor-core": "*", "@webide/language-engine": "*",
-    "@webide/runtime-engine": "*", "@webide/preview-engine": "*", "zustand": "^5.0.0"
+  "exports": {
+    ".": "./src/index.ts",
+    "./theme.css": "./src/theme.css"
   },
-  "peerDependencies": { "react": ">=18", "react-dom": ">=18", "monaco-editor": ">=0.50.0" }
+  "dependencies": {
+    "@webide/shared": "*",
+    "@webide/storage": "*",
+    "@webide/file-engine": "*",
+    "@webide/project-engine": "*",
+    "@webide/editor-core": "*",
+    "@webide/language-engine": "*",
+    "@webide/runtime-engine": "*",
+    "@webide/preview-engine": "*",
+    "zustand": "^5.0.0",
+    "@webide/terminal-engine": "*",
+    "@xterm/xterm": "^6.0.0",
+    "@xterm/addon-fit": "^0.11.0"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "monaco-editor": ">=0.50.0"
+  }
 }

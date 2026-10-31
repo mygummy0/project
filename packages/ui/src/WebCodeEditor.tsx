@@ -27,6 +27,11 @@ export interface WebCodeEditorProps {
    * Recommended: it keeps the host page's CSP strict. Without it the preview uses `srcdoc`.
    */
   previewSandboxUrl?: string;
+  /**
+   * Base URL of a running services/terminal-server, e.g. "/terminal" (same origin, behind your reverse proxy).
+   * Without it the Terminal tab is not shown at all.
+   */
+  terminalUrl?: string;
   /** Custom persistence; defaults to IndexedDB in the browser. */
   storage?: StorageAdapter;
   className?: string;
@@ -59,6 +64,7 @@ export function WebCodeEditor({
   showPreview = true,
   autoRun = true,
   previewSandboxUrl,
+  terminalUrl,
   storage,
   className = "",
   style,
@@ -66,7 +72,7 @@ export function WebCodeEditor({
   const [session, setSession] = useState<IdeSession | null>(null);
 
   useEffect(() => {
-    const s = new IdeSession({ projectId, theme, language, readOnly, storage, autoRun, previewSandboxUrl });
+    const s = new IdeSession({ projectId, theme, language, readOnly, storage, autoRun, previewSandboxUrl, terminalUrl });
     setSession(s);
     void s.init();
     return () => {
@@ -75,7 +81,7 @@ export function WebCodeEditor({
     };
     // Re-create only when the identity of the project/session inputs changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, language, readOnly, storage, previewSandboxUrl]);
+  }, [projectId, language, readOnly, storage, previewSandboxUrl, terminalUrl]);
 
   useEffect(() => {
     if (session && theme) session.setTheme(theme);

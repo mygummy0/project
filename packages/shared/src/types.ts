@@ -32,7 +32,7 @@ export interface LayoutState {
   sidebarView: "explorer" | "search";
   previewOpen: boolean;
   bottomOpen: boolean;
-  bottomTab: "console" | "problems" | "output";
+  bottomTab: "console" | "problems" | "output" | "terminal";
   sidebarWidth: number;
   /** Width share of the first editor group when split (0.2 – 0.8). */
   splitRatio: number;

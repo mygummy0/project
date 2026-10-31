@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useIde, useSession } from "../context";
 import { IconClose, IconError, IconInfo, IconWarn } from "../icons";
+import { TerminalPanel } from "./TerminalPanel";
 
 const levelClass: Record<string, string> = {
   log: "text-ide-text",
@@ -15,10 +16,13 @@ const levelClass: Record<string, string> = {
 
 export function BottomPanel() {
   const session = useSession();
-  const tab = useIde((s) => s.layout.bottomTab);
+  const savedTab = useIde((s) => s.layout.bottomTab);
   const output = useIde((s) => s.output);
   const problems = useIde((s) => s.problems);
   const endRef = useRef<HTMLDivElement>(null);
+  const hasTerminal = useIde((s) => s.terminalUrl !== null);
+  // A layout saved with the Terminal tab must not leave a blank panel where no terminal server exists.
+  const tab = savedTab === "terminal" && !hasTerminal ? "console" : savedTab;
 
   const entries = output.filter((o) => (tab === "console" ? o.source !== "runtime" : tab === "output" ? o.source === "runtime" : false));
 
@@ -28,7 +32,7 @@ export function BottomPanel() {
 
   const errors = problems.filter((p) => p.severity === "error").length;
   const warnings = problems.filter((p) => p.severity === "warning").length;
-  const tabBtn = (id: "console" | "problems" | "output", label: string, badge?: string) => (
+  const tabBtn = (id: "console" | "problems" | "output" | "terminal", label: string, badge?: string) => (
     <button
       role="tab"
       aria-selected={tab === id}
@@ -47,9 +51,10 @@ export function BottomPanel() {
           {tabBtn("console", "Console")}
           {tabBtn("problems", "Problems", problems.length ? String(problems.length) : undefined)}
           {tabBtn("output", "Output")}
+          {hasTerminal && tabBtn("terminal", "Terminal")}
         </div>
         <div className="flex items-center gap-1 text-ide-muted">
-          {tab !== "problems" && (
+          {tab !== "problems" && tab !== "terminal" && (
             <button className="rounded px-2 py-0.5 text-xs hover:bg-ide-hover" onClick={() => session.clearOutput()}>
               Clear
             </button>
@@ -59,7 +64,10 @@ export function BottomPanel() {
           </button>
         </div>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto font-mono text-xs leading-5">
+      {tab === "terminal" && hasTerminal && (
+        <div className="min-h-0 flex-1"><TerminalPanel /></div>
+      )}
+      <div className={`min-h-0 flex-1 overflow-auto font-mono text-xs leading-5 ${tab === "terminal" && hasTerminal ? "hidden" : ""}`}>
         {tab === "problems" ? (
           problems.length === 0 ? (
             <p className="p-3 text-ide-muted">No problems detected in the workspace.</p>

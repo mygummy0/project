@@ -63,6 +63,13 @@ function useShortcuts(features: WorkbenchFeatures) {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       const k = e.key.toLowerCase();
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === "`" && session.state.terminalUrl) {
+        e.preventDefault();
+        session.toggleTerminalPanel();
+        return;
+      }
+      // While typing in the terminal, Ctrl+B / Ctrl+J / Ctrl+S… belong to the shell (tmux, readline…).
+      if ((e.target as HTMLElement | null)?.closest?.(".xterm")) return;
       const L = session.state.layout;
       let handled = true;
       if (mod && !e.shiftKey && !e.altKey && k === "b" && features.showExplorer) session.setLayout({ sidebarOpen: !L.sidebarOpen });

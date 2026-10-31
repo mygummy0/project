@@ -12,7 +12,9 @@ apps/web (Next.js App Router: /, /editor/[projectId], /sandbox, CSP headers)
         ├─ preview-engine   buildPreviewDocument, console bridge, PreviewController, sandbox document
         └─ bundler          sucrase transpile (TS/JSX) + module graph → CommonJS-style registry; npm → ESM CDN
    shared: IdeError, path normalisation, Emitter, language map, types
-   interface-only: terminal-engine, collaboration-engine, ai-engine
+   terminal-engine: TerminalBackend contract + WebSocket backend/login helpers (browser side)
+   services/terminal-server: node-pty + ws, password/cookie auth, 127.0.0.1 only (behind the reverse proxy at /terminal)
+   interface-only: collaboration-engine, ai-engine
 ```
 
 ## Engine contracts
@@ -38,6 +40,9 @@ Cleanup: `IdeSession.dispose()` flushes autosave, stops runtime/preview and disp
 - A per-project permission hook (`ProjectPermissions`) is enforced in `ProjectService`; the local provider allows everything.
 - The script runner executes user code as part of a blob worker's source (no `eval`), so it works under the
   IDE's CSP without `'unsafe-eval'`.
+- Web terminal = a remote shell, so: loopback-only listener, scrypt password + signed cookie (HttpOnly, SameSite=Strict, Secure),
+  exact-Origin check on login and WebSocket upgrade, login lockout, session cap, idle timeout, secrets stripped from the
+  shell environment, refuses to run as root. The IDE shell keeps `connect-src 'self'`, which covers the same-origin WebSocket.
 - No API keys exist in the client; AI providers must go through a server route.
 - WebContainers (COOP/COEP) are not used, so embedding is not constrained by cross-origin isolation; revisit before adopting them.
 
@@ -45,4 +50,4 @@ Cleanup: `IdeSession.dispose()` flushes autosave, stops runtime/preview and disp
 Done in Phase 2: bundler (TS/React preview, multi-module TS runner), split editor, project-wide replace.
 Remaining Phase 2: CodeMirror 6 mobile fallback, Pyodide worker runtime (must run inside the sandbox origin because the
 IDE CSP blocks remote scripts), npm typings acquisition, Prettier, image assets in the preview. Phase 3: accounts + PostgreSQL adapter (`services/api`), LSP gateway, Yjs collaboration,
-sandboxed execution workers (CPU/memory/time/network limits), xterm terminal over a WebSocket PTY, opt-in AI panel, Git.
+sandboxed execution workers (CPU/memory/time/network limits), opt-in AI panel, Git.

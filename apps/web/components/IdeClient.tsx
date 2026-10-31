@@ -10,5 +10,6 @@ const WebCodeEditor = dynamic(() => import("@webide/ui").then((m) => m.WebCodeEd
 });
 
 export function IdeClient(props: WebCodeEditorProps) {
-  return <WebCodeEditor previewSandboxUrl="/sandbox" {...props} />;
+  // Set NEXT_PUBLIC_TERMINAL_URL (e.g. "/terminal") at build time to enable the Terminal tab.
+  return <WebCodeEditor previewSandboxUrl="/sandbox" terminalUrl={process.env.NEXT_PUBLIC_TERMINAL_URL || undefined} {...props} />;
 }
